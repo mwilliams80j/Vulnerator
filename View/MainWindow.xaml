@@ -1642,6 +1642,24 @@
                                             </MultiBinding>
                                         </CheckBox.CommandParameter>
                                     </CheckBox>
+                                    <CheckBox
+                                        x:Name="cbAcceptOverrides"
+                                        Grid.Row="4"
+                                        Grid.Column="1"
+                                        Margin="5,0,0,5"
+                                        Controls:ControlsHelper.MouseOverBorderBrush="{DynamicResource AccentColorBrush}"
+                                        Command="{Binding UpdateDictionaryCommand}"
+                                        Content="Accept Overrides"
+                                        IsChecked="{Binding InnerText, Converter={StaticResource StringToBool}, Mode=OneTime, Source={StaticResource XmlConfig}, XPath=reportingTab/cbAcceptOverrides}"
+                                        IsEnabled="{Binding IsEnabled}"
+                                        TabIndex="12">
+                                        <CheckBox.CommandParameter>
+                                            <MultiBinding Converter="{StaticResource CommandConverter}">
+                                                <Binding Path="Name" RelativeSource="{RelativeSource Self}" />
+                                                <Binding Path="IsChecked" RelativeSource="{RelativeSource Self}" />
+                                            </MultiBinding>
+                                        </CheckBox.CommandParameter>
+                                    </CheckBox>
                                 </Grid>
                                 <Label
                                     HorizontalAlignment="Stretch"
