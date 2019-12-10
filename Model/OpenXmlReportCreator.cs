@@ -37,6 +37,7 @@ namespace Vulnerator.Model
         private bool IncludCatIIFindings { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("cbCatII")); } }
         private bool IncludCatIIIFindings { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("cbCatIII")); } }
         private bool IncludCatIVFindings { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("cbCatIV")); } }
+        private bool AcceptOverrides { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("cbAcceptOverrides")); } }   //THX 20191202
         private bool IsDiacapPackage { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("rbDiacap")); } }
         private bool RevisionThreeSelected { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("revisionThreeRadioButton")); } }
         private bool AssetOverviewTabIsNeeded { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("cbAssetOverview")); } }
@@ -234,7 +235,7 @@ namespace Vulnerator.Model
                         {
                             if (sqliteDataReader["VulnId"].ToString().Equals("Plugin"))
                             { continue; }
-                            if (!FilterBySeverity(sqliteDataReader["Impact"].ToString(), sqliteDataReader["RawRisk"].ToString()))
+                            if (!FilterBySeverity(sqliteDataReader["Impact"].ToString(), sqliteDataReader["RawRisk"].ToString(), sqliteDataReader["SeverityOverride"].ToString()))
                             { continue; }
                             if (!FilterByStatus(sqliteDataReader["Status"].ToString()))
                             { continue; }
@@ -464,10 +465,26 @@ namespace Vulnerator.Model
                 List<AssetOverviewLineItem> assetList = new List<AssetOverviewLineItem>();
                 using (SQLiteCommand sqliteCommand = FindingsDatabaseActions.sqliteConnection.CreateCommand())
                 {
-                    sqliteCommand.Parameters.Add(new SQLiteParameter("FindingType", findingType));
-                    sqliteCommand.CommandText = "SELECT AssetIdToReport, HostName, IpAddress, GroupName, " + 
-                        "SUM(CASE WHEN (RawRisk = 'I' OR (Impact = 'Critical' AND RawRisk IS NULL) OR (Impact = 'High' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatI, " + 
-                        "SUM(CASE WHEN (RawRisk = 'II' OR (Impact = 'Medium' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatII, " + 
+                    if (AcceptOverrides)
+                    {   //THX 20191203
+                        sqliteCommand.Parameters.Add(new SQLiteParameter("FindingType", findingType));
+                        sqliteCommand.CommandText = "SELECT AssetIdToReport, HostName, IpAddress, GroupName, " +
+                            "SUM(CASE WHEN (SeverityOverride = 'I' OR (RawRisk = 'I' AND SeverityOverride IS NULL) OR (Impact = 'Critical' AND RawRisk IS NULL AND SeverityOverride IS NULL) OR (Impact = 'High' AND RawRisk IS NULL AND SeverityOverride IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatI, " +
+                            "SUM(CASE WHEN (SeverityOverride = 'II' OR (RawRisk = 'II' AND SeverityOverride IS NULL) OR (Impact = 'Medium' AND RawRisk IS NULL AND SeverityOverride IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatII, " +
+                            "SUM(CASE WHEN (SeverityOverride = 'III' OR (RawRisk = 'III' AND SeverityOverride IS NULL) OR (Impact = 'Low' AND RawRisk IS NULL AND SeverityOverride IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatIII, " +
+                            "SUM(CASE WHEN (SeverityOverride = 'IV' OR (RawRisk = 'IV' AND SeverityOverride IS NULL) OR (Impact = 'Informational' AND RawRisk IS NULL AND SeverityOverride IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatIV, " +
+                            "COUNT(CASE WHEN Status = 'Ongoing' THEN 1 END) AS Total, " +
+                            "OperatingSystem, IsCredentialed, Found21745, Found26917, FileName " +
+                            "FROM Assets NATURAL JOIN UniqueFinding NATURAL JOIN Vulnerability NATURAL JOIN Groups NATURAL JOIN FileNames " +
+                            "NATURAL JOIN FindingTypes NATURAL JOIN FindingStatuses WHERE FindingType = @FindingType " +
+                            "GROUP BY AssetIdToReport, FileName;";
+                    }
+                    else
+                    {
+                        sqliteCommand.Parameters.Add(new SQLiteParameter("FindingType", findingType));
+                        sqliteCommand.CommandText = "SELECT AssetIdToReport, HostName, IpAddress, GroupName, " +
+                        "SUM(CASE WHEN (RawRisk = 'I' OR (Impact = 'Critical' AND RawRisk IS NULL) OR (Impact = 'High' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatI, " +
+                        "SUM(CASE WHEN (RawRisk = 'II' OR (Impact = 'Medium' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatII, " +
                         "SUM(CASE WHEN (RawRisk = 'III' OR (Impact = 'Low' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatIII, " +
                         "SUM(CASE WHEN (RawRisk = 'IV' OR (Impact = 'Informational' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatIV, " +
                         "COUNT(CASE WHEN Status = 'Ongoing' THEN 1 END) AS Total, " +
@@ -475,13 +492,24 @@ namespace Vulnerator.Model
                         "FROM Assets NATURAL JOIN UniqueFinding NATURAL JOIN Vulnerability NATURAL JOIN Groups NATURAL JOIN FileNames " +
                         "NATURAL JOIN FindingTypes NATURAL JOIN FindingStatuses WHERE FindingType = @FindingType " +
                         "GROUP BY AssetIdToReport, FileName;";
+                        //sqliteCommand.CommandText = "SELECT AssetIdToReport, HostName, IpAddress, GroupName, " +
+                        //     "SUM(CASE WHEN (RawRisk = 'I' OR (Impact = 'Critical' AND RawRisk IS NULL) OR (Impact = 'High' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatI, " +
+                        //     "SUM(CASE WHEN (RawRisk = 'II' OR (Impact = 'Medium' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatII, " +
+                        //     "SUM(CASE WHEN (RawRisk = 'III' OR (Impact = 'Low' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatIII, " +
+                        //     "SUM(CASE WHEN (RawRisk = 'IV' OR (Impact = 'Informational' AND RawRisk IS NULL)) AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS CatIV, " +
+                        //     "COUNT(CASE WHEN Status = 'Ongoing' THEN 1 END) AS Total, " +
+                        //     "OperatingSystem, IsCredentialed, Found21745, Found26917, FileName " +
+                        //     "FROM Assets NATURAL JOIN UniqueFinding NATURAL JOIN Vulnerability NATURAL JOIN Groups NATURAL JOIN FileNames " +
+                        //     "NATURAL JOIN FindingTypes NATURAL JOIN FindingStatuses WHERE FindingType = @FindingType " +
+                        //     "GROUP BY AssetIdToReport, FileName;";
+                    }
                     if (findingType.Equals("XCCDF"))
                     {
-                        sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(893, " NATURAL JOIN ScapScores");
-                        sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", ScapScore");
+                        sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(893, " NATURAL JOIN ScapScores");  //THX TODO: Fix that hard constant!
+                        sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", ScapScore");   //THX TODO: Fix that hard constant!
                     }
                     if (findingType.Equals("FPR"))
-                    { sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", SUM(CASE WHEN RawRisk IS NULL AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS Unknown"); }
+                    { sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", SUM(CASE WHEN RawRisk IS NULL AND SeverityOverride IS NULL AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS Unknown"); } //THX TODO: Fix that hard constant!
                     using (SQLiteDataReader sqliteDataReader = sqliteCommand.ExecuteReader())
                     {
                         int i = 1;
@@ -1435,18 +1463,20 @@ namespace Vulnerator.Model
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 8U, Max = 8U, Width = 25.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 9U, Max = 9U, Width = 10.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 10U, Max = 10U, Width = 15.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 11U, Max = 11U, Width = 35.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 11U, Max = 11U, Width = 15.00d, CustomWidth = true });   //THX 20191203 (override)
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 12U, Max = 12U, Width = 35.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 13U, Max = 13U, Width = 35.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 14U, Max = 14U, Width = 20.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 14U, Max = 14U, Width = 35.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 15U, Max = 15U, Width = 20.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 16U, Max = 16U, Width = 15.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 17U, Max = 17U, Width = 35.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 16U, Max = 16U, Width = 20.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 17U, Max = 17U, Width = 15.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 18U, Max = 18U, Width = 35.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 19U, Max = 19U, Width = 35.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 20U, Max = 20U, Width = 25.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 21U, Max = 21U, Width = 15.00d, CustomWidth = true });
-                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 22U, Max = 22U, Width = 35.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 20U, Max = 20U, Width = 35.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 21U, Max = 21U, Width = 25.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 22U, Max = 22U, Width = 15.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 23U, Max = 23U, Width = 35.00d, CustomWidth = true });
+                stigDetailsOpenXmlWriter.WriteElement(new Column() { Min = 24U, Max = 24U, Width = 35.00d, CustomWidth = true });
                 stigDetailsOpenXmlWriter.WriteEndElement();
             }
             catch (Exception exception)
@@ -1471,12 +1501,14 @@ namespace Vulnerator.Model
                 WriteCellValue(stigDetailsOpenXmlWriter, "STIG Name", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Risk Factor", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "STIG Severity", 4);
+                WriteCellValue(stigDetailsOpenXmlWriter, "STIG Severity Override", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Description", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Check Content", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Solution", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Host Name", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "IP Address", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Status", 4);
+                WriteCellValue(stigDetailsOpenXmlWriter, "Technology", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Comments", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "Finding Details", 4);
                 WriteCellValue(stigDetailsOpenXmlWriter, "File Name", 4);
@@ -1515,6 +1547,7 @@ namespace Vulnerator.Model
                             WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["Source"].ToString(), 24);
                             WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["Impact"].ToString(), 24);
                             WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["RawRisk"].ToString(), 24);
+                            WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["SeverityOverride"].ToString(), 24);  //THX 20191203
                             WriteCellValue(
                                 stigDetailsOpenXmlWriter,
                                 LargeCellValueHandler(
@@ -1545,6 +1578,16 @@ namespace Vulnerator.Model
                             WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["HostName"].ToString(), 24);
                             WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["IpAddress"].ToString(), 20);
                             WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["Status"].ToString(), 24);
+                            WriteCellValue(stigDetailsOpenXmlWriter, sqliteDataReader["TechArea"].ToString(), 24);
+                          /*  WriteCellValue(
+                                stigDetailsOpenXmlWriter,
+                                LargeCellValueHandler(
+                                    sqliteDataReader["TechArea"].ToString(),
+                                    sqliteDataReader["VulnId"].ToString(),
+                                    sqliteDataReader["AssetIdToReport"].ToString().Replace(",", Environment.NewLine),
+                                   "TechArea"
+                                ),
+                                40); */
                             WriteCellValue(
                                 stigDetailsOpenXmlWriter,
                                 LargeCellValueHandler(
@@ -2299,7 +2342,7 @@ namespace Vulnerator.Model
 
         #region Data Preparation
 
-        private bool FilterBySeverity(string impact, string rawRisk)
+        private bool FilterBySeverity(string impact, string rawRisk, string overrideRisk)   //THX 20191203
         {
             try
             {
@@ -2327,6 +2370,22 @@ namespace Vulnerator.Model
                 if (!string.IsNullOrWhiteSpace(rawRisk))
                 {
                     switch (rawRisk)
+                    {
+                        case "I":
+                            { stigSeverityMatch = IncludCatIFindings; break; }
+                        case "II":
+                            { stigSeverityMatch = IncludCatIIFindings; break; }
+                        case "III":
+                            { stigSeverityMatch = IncludCatIIIFindings; break; }
+                        case "IV":
+                            { stigSeverityMatch = IncludCatIVFindings; break; }
+                        default:
+                            { break; }
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(overrideRisk) && AcceptOverrides)       //THX 20191203
+                {
+                    switch (overrideRisk)
                     {
                         case "I":
                             { stigSeverityMatch = IncludCatIFindings; break; }
@@ -2722,8 +2781,8 @@ namespace Vulnerator.Model
                 if (isMerged)
                 {
                     if (findingType != "FPR")
-                    {
-                        return "SELECT FindingType, GroupName, VulnId, RuleId, VulnTitle, RawRisk, Impact, Description, IaControl, " +
+                    {       //THX 20191203 add SeverityOverride (which maps to var OverrideRisk)
+                        return "SELECT FindingType, GroupName, VulnId, RuleId, VulnTitle, RawRisk, SeverityOverride, Impact, Description, IaControl, " +
                             "NistControl, Status, Source, Version, Release, Comments, FindingDetails, RiskStatement, CciNumber, " +
                             "GROUP_CONCAT(DISTINCT AssetIdToReport) AS AssetIdToReport FROM UniqueFinding " +
                             "NATURAL JOIN FindingTypes NATURAL JOIN VulnerabilitySources " +
