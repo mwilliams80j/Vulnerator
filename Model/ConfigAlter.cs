@@ -193,6 +193,7 @@ namespace Vulnerator.Model
                                 new XElement("cbCatII", "True"),
                                 new XElement("cbCatIII", "True"),
                                 new XElement("cbCatIV", "True"),
+                                new XElement("cbAcceptOverrides", "True"),
                                 new XElement("cbOpen", "True"),
                                 new XElement("cbNotReviewed", "True"),
                                 new XElement("cbNotApplicable", "True"),

@@ -105,7 +105,7 @@ namespace Vulnerator.Model
             {
                 sqliteCommand.CommandText = "CREATE TABLE Assets (" +
                     "AssetIndex INTEGER PRIMARY KEY, AssetIdToReport TEXT UNIQUE ON CONFLICT IGNORE, " +
-                    "HostName TEXT, IpAddress TEXT, OperatingSystem TEXT, IsCredentialed TEXT, " +
+                    "HostName TEXT, IpAddress TEXT, TechArea TEXT, OperatingSystem TEXT, IsCredentialed TEXT, " +
                     "Found21745 TEXT, Found26917 TEXT, GroupIndex INTEGER NOT NULL, " +
                     "FOREIGN KEY(GroupIndex) REFERENCES Groups(GroupIndex) ON UPDATE CASCADE);";
                 sqliteCommand.ExecuteNonQuery();
@@ -157,7 +157,8 @@ namespace Vulnerator.Model
                     "NistControl TEXT, CPEs TEXT, CrossReferences TEXT, CheckContent TEXT, " +
                     "IavmNumber TEXT, FixText TEXT, PluginPublishedDate TEXT, " +
                     "PluginModifiedDate TEXT, PatchPublishedDate TEXT, Age TEXT, " +
-                    "RawRisk TEXT, Impact TEXT, RuleId TEXT UNIQUE ON CONFLICT IGNORE, CciNumber TEXT);";
+                    "RawRisk TEXT, Impact TEXT, SeverityOverride TEXT, SeverityJustification TEXT, " +   //THX 20191203 SeverityOverride and Justification
+                    "RuleId TEXT UNIQUE ON CONFLICT IGNORE, CciNumber TEXT);"; 
                 sqliteCommand.ExecuteNonQuery();
             }
             catch (Exception exception)
@@ -280,7 +281,8 @@ namespace Vulnerator.Model
                 sqliteCommand.CommandText = "DROP INDEX IF EXISTS Assets.index_asset; " +
                     "DROP INDEX IF EXISTS Vulnerability.index_vulnid; " +
                     "DROP INDEX IF EXISTS Vulnerability.index_impact; " +
-                    "DROP INDEX IF EXISTS Vulnerability.index_rawrisk;";
+                    "DROP INDEX IF EXISTS Vulnerability.index_rawrisk; " +
+                    "DROP INDEX IF EXISTS Vulnerability.index_severityoverride;";   //THX 20191203
                 sqliteCommand.ExecuteNonQuery();
             }
             catch (Exception exception)
@@ -329,7 +331,8 @@ namespace Vulnerator.Model
                     string indexVulnerability = "CREATE INDEX index_vulnid ON Vulnerability (VulnId);";
                     string indexImpact = "CREATE INDEX index_impact ON Vulnerability (Impact);";
                     string indexRawRisk = "CREATE INDEX index_rawrisk ON Vulnerability (RawRisk);";
-                    sqlitecommand.CommandText = indexAsset + indexVulnerability + indexImpact + indexRawRisk;
+                    string indexSeverityOverride = "CREATE INDEX index_severityoverride ON Vulnerability (SeverityOverride);";  //THX 20191203
+                    sqlitecommand.CommandText = indexAsset + indexVulnerability + indexImpact + indexRawRisk + indexSeverityOverride;   //THX 20191203
                     sqlitecommand.ExecuteNonQuery();
                 }
             }

@@ -303,6 +303,7 @@ namespace Vulnerator.Model
                 sqliteCommand.Parameters.Add(new SQLiteParameter("VulnId", xmlReader.GetAttribute("pluginID")));
                 sqliteCommand.Parameters.Add(new SQLiteParameter("RuleId", xmlReader.GetAttribute("pluginID")));
                 sqliteCommand.Parameters.Add(new SQLiteParameter("VulnTitle", xmlReader.GetAttribute("pluginName")));
+                sqliteCommand.Parameters.Add(new SQLiteParameter("RawRisk", ConvertSeverityToRawRisk(xmlReader.GetAttribute("severity"))));       //THX 20191204  Nessus moved from "stig_severity" value to just be "severity" attr of "ReportItem", and encoded 4..0 for CAT I..IV
                 sqliteCommand.Parameters.Add(new SQLiteParameter("LastObserved", workingSystem.StartTime.ToLongDateString()));
                 sqliteCommand.Parameters.Add(new SQLiteParameter("Status", "Ongoing"));
                 sqliteCommand.Parameters.Add(new SQLiteParameter("FindingType", "ACAS"));
@@ -375,7 +376,7 @@ namespace Vulnerator.Model
                                     sqliteCommand.Parameters.Add(new SQLiteParameter("RiskStatement", xmlReader.Value));
                                     break;
                                 }
-                            case "plugin_output":
+                            case "plugin_output":   //THX 20121204 From what I'm seeing, .nessus files now only have this as a value.  All other ReportItem data are now attrs of the ReportItem vs. sub-values!
                                 {
                                     xmlReader.Read();
                                     sqliteCommand.Parameters.Add(new SQLiteParameter("PluginOutput", xmlReader.Value));
@@ -651,6 +652,31 @@ namespace Vulnerator.Model
             catch (Exception exception)
             {
                 log.Error("Unable to set ACAS Nessus File source information.");
+                throw exception;
+            }
+        }
+        private string ConvertSeverityToRawRisk(string severity)
+        {
+            try
+            {
+                switch (severity)
+                {
+                    case "4":
+                    case "3":
+                        { return "I"; }
+                    case "2":
+                        { return "II"; }
+                    case "1":
+                        { return "III"; }
+                    case "0":
+                        { return "IV"; }
+                    default:
+                        { return "Unknown"; }
+                }
+            }
+            catch (Exception exception)
+            {
+                log.Error("Unable to convert impact to raw risk.");
                 throw exception;
             }
         }

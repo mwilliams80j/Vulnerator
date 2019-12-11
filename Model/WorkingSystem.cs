@@ -16,6 +16,8 @@ namespace Vulnerator.Model
 
         public string OperatingSystem = string.Empty;
 
+        public string TechArea = string.Empty;
+
         public string CredentialedScan = string.Empty;
 
         public WorkingSystem()

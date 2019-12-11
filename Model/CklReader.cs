@@ -25,7 +25,8 @@ namespace Vulnerator
         private string fileNameWithoutPath = string.Empty;
         private string[] vulnerabilityTableColumns = new string[] { 
             "StigId", "VulnId", "VulnTitle", "Description", "RiskStatement", "IaControl", "NistControl", "CPEs", "CrossReferences", "CheckContent", 
-            "IavmNumber", "FixText", "PluginPublishedDate", "PluginModifiedDate", "PatchPublishedDate", "Age", "RawRisk", "Impact", "RuleId", "CciNumber" };
+            "IavmNumber", "FixText", "PluginPublishedDate", "PluginModifiedDate", "PatchPublishedDate", "Age", "RawRisk", "Impact", 
+            "SeverityOverride", "SeverityJustification", "RuleId", "CciNumber" };   //THX 20191203 Add SeverityOverride and Justification
         private string[] uniqueFindingTableColumns = new string[] { "Comments", "FindingDetails", "PluginOutput", "LastObserved" };
         private bool UserPrefersHostName { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("rbHostIdentifier")); } }
         private bool RevisionThreeSelected { get { return bool.Parse(ConfigAlter.ReadSettingsFromDictionary("revisionThreeRadioButton")); } }
@@ -146,13 +147,18 @@ namespace Vulnerator
                 else
                 { sqliteCommand.Parameters.Add(new SQLiteParameter("HostName", "Host Name Not Provided")); }
 
+                if (!string.IsNullOrWhiteSpace(workingSystem.TechArea))
+                { sqliteCommand.Parameters.Add(new SQLiteParameter("TechArea", workingSystem.TechArea)); }
+                else
+                { sqliteCommand.Parameters.Add(new SQLiteParameter("TechArea", "Tech Area Not Provided")); }
+
                 if (UserPrefersHostName)
                 { sqliteCommand.Parameters.Add(new SQLiteParameter("AssetIdToReport", sqliteCommand.Parameters["HostName"].Value)); }
                 else
                 { sqliteCommand.Parameters.Add(new SQLiteParameter("AssetIdToReport", sqliteCommand.Parameters["IpAddress"].Value)); }
 
-                sqliteCommand.CommandText = "INSERT INTO Assets (AssetIdToReport, HostName, IpAddress, GroupIndex) VALUES " +
-                    "(@AssetIdToReport, @HostName, @IpAddress, " +
+                sqliteCommand.CommandText = "INSERT INTO Assets (AssetIdToReport, HostName, IpAddress, TechArea, GroupIndex) VALUES " +
+                    "(@AssetIdToReport, @HostName, @IpAddress, @TechArea, " +
                     "(SELECT GroupIndex FROM Groups WHERE GroupName = @GroupName));";
                 sqliteCommand.ExecuteNonQuery();
             }
@@ -226,6 +232,11 @@ namespace Vulnerator
                             case "HOST_IP":
                                 {
                                     workingsystem.IpAddress = ObtainCurrentNodeValue(xmlReader);
+                                    break;
+                                }
+                            case "TECH_AREA":
+                                {
+                                    workingsystem.TechArea = ObtainCurrentNodeValue(xmlReader);
                                     break;
                                 }
                             default:
@@ -508,6 +519,24 @@ namespace Vulnerator
                             case "COMMENTS":
                                 {
                                     sqliteCommand.Parameters.Add(new SQLiteParameter("Comments", ObtainCurrentNodeValue(xmlReader)));
+                                    break;
+                                }
+                            case "SEVERITY_OVERRIDE":   //THX 20191202
+                                {
+                                    string value = ObtainCurrentNodeValue(xmlReader);
+                                    if (!string.IsNullOrWhiteSpace(value))
+                                    {
+                                         sqliteCommand.Parameters.Add(new SQLiteParameter("SeverityOverride", ConvertImpactToRawRisk(ConvertSeverityToImpact(value))));
+                                    }
+                                    else
+                                    {
+                                        sqliteCommand.Parameters.Add(new SQLiteParameter("SeverityOverride", null));  //THX 20191203 Ensure is NULL
+                                    }
+                                    break;
+                                }
+                            case "SEVERITY_JUSTIFICATION":  //THX 20191202
+                                {
+                                    sqliteCommand.Parameters.Add(new SQLiteParameter("SeverityJustification", ObtainCurrentNodeValue(xmlReader)));
                                     break;
                                 }
                             default:
