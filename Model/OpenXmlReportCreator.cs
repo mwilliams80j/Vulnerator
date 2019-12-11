@@ -235,8 +235,16 @@ namespace Vulnerator.Model
                         {
                             if (sqliteDataReader["VulnId"].ToString().Equals("Plugin"))
                             { continue; }
-                            if (!FilterBySeverity(sqliteDataReader["Impact"].ToString(), sqliteDataReader["RawRisk"].ToString(), sqliteDataReader["SeverityOverride"].ToString()))
-                            { continue; }
+                            if (findingType.Equals("CKL"))    //THX 20191210  Include SeverityOverride for CKLs only in checking
+                            {
+                                if (!FilterBySeverityCKL(sqliteDataReader["Impact"].ToString(), sqliteDataReader["RawRisk"].ToString(), sqliteDataReader["SeverityOverride"].ToString()))
+                                { continue; }
+                            }
+                            else
+                            {
+                                if (!FilterBySeverity(sqliteDataReader["Impact"].ToString(), sqliteDataReader["RawRisk"].ToString()))
+                                { continue; }
+                            }
                             if (!FilterByStatus(sqliteDataReader["Status"].ToString()))
                             { continue; }
 
@@ -505,11 +513,28 @@ namespace Vulnerator.Model
                     }
                     if (findingType.Equals("XCCDF"))
                     {
-                        sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(893, " NATURAL JOIN ScapScores");  //THX TODO: Fix that hard constant!
-                        sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", ScapScore");   //THX TODO: Fix that hard constant!
+                        if (AcceptOverrides)
+                        {
+                            sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(1270, " NATURAL JOIN ScapScores");  //THX TODO: Fix that hard constant!
+                            sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(1106, ", ScapScore");   //THX TODO: Fix that hard constant!
+                        }
+                        else
+                        {
+                            sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(893, " NATURAL JOIN ScapScores");
+                            sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", ScapScore");
+                        }
                     }
                     if (findingType.Equals("FPR"))
-                    { sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", SUM(CASE WHEN RawRisk IS NULL AND SeverityOverride IS NULL AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS Unknown"); } //THX TODO: Fix that hard constant!
+                    {
+                        if (AcceptOverrides)
+                        {
+                            sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(1106, ", SUM(CASE WHEN RawRisk IS NULL AND SeverityOverride IS NULL AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS Unknown"); //THX TODO: Fix that hard constant!
+                        }
+                        else
+                        {
+                            sqliteCommand.CommandText = sqliteCommand.CommandText.Insert(729, ", SUM(CASE WHEN RawRisk IS NULL AND SeverityOverride IS NULL AND Status = 'Ongoing' THEN 1 ELSE 0 END) AS Unknown");
+                        }
+                    }
                     using (SQLiteDataReader sqliteDataReader = sqliteCommand.ExecuteReader())
                     {
                         int i = 1;
@@ -2342,7 +2367,60 @@ namespace Vulnerator.Model
 
         #region Data Preparation
 
-        private bool FilterBySeverity(string impact, string rawRisk, string overrideRisk)   //THX 20191203
+        private bool FilterBySeverity(string impact, string rawRisk)
+        {
+            try
+            {
+                bool riskFactorMatch = true;
+                bool stigSeverityMatch = true;
+                bool riskFactorToStigSeverityCrossRef = true;
+                if (!string.IsNullOrWhiteSpace(impact))
+                {
+                    switch (impact)
+                    {
+                        case "Critical":
+                            { riskFactorMatch = IncludeCriticalFindings; riskFactorToStigSeverityCrossRef = IncludCatIFindings; break; }
+                        case "High":
+                            { riskFactorMatch = IncludeHighFindings; riskFactorToStigSeverityCrossRef = IncludCatIFindings; break; }
+                        case "Medium":
+                            { riskFactorMatch = IncludeMediumFindings; riskFactorToStigSeverityCrossRef = IncludCatIIFindings; break; }
+                        case "Low":
+                            { riskFactorMatch = IncludeLowFindings; riskFactorToStigSeverityCrossRef = IncludCatIIIFindings; break; }
+                        case "Informational":
+                            { riskFactorMatch = IncludeInformationalFindings; riskFactorToStigSeverityCrossRef = IncludCatIVFindings; break; }
+                        default:
+                            { break; }
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(rawRisk))
+                {
+                    switch (rawRisk)
+                    {
+                        case "I":
+                            { stigSeverityMatch = IncludCatIFindings; break; }
+                        case "II":
+                            { stigSeverityMatch = IncludCatIIFindings; break; }
+                        case "III":
+                            { stigSeverityMatch = IncludCatIIIFindings; break; }
+                        case "IV":
+                            { stigSeverityMatch = IncludCatIVFindings; break; }
+                        default:
+                            { break; }
+                    }
+                }
+                if (!riskFactorMatch || !stigSeverityMatch || !riskFactorToStigSeverityCrossRef)
+                { return false; }
+                else
+                { return true; }
+            }
+            catch (Exception exception)
+            {
+                log.Error("Unable to filter Excel report results by (non-CKL) severity value.");    //THX 20191210
+                throw exception;
+            }
+        }
+
+        private bool FilterBySeverityCKL(string impact, string rawRisk, string overrideRisk)   //THX 20191203
         {
             try
             {
@@ -2406,7 +2484,7 @@ namespace Vulnerator.Model
             }
             catch (Exception exception)
             {
-                log.Error("Unable to filter Excel report results by severity value.");
+                log.Error("Unable to filter Excel report results by CKL severity values.");
                 throw exception;
             }
         }
@@ -2780,7 +2858,7 @@ namespace Vulnerator.Model
             {
                 if (isMerged)
                 {
-                    if (findingType != "FPR")
+                    if (!findingType.Equals("FPR"))
                     {       //THX 20191203 add SeverityOverride (which maps to var OverrideRisk)
                         return "SELECT FindingType, GroupName, VulnId, RuleId, VulnTitle, RawRisk, SeverityOverride, Impact, Description, IaControl, " +
                             "NistControl, Status, Source, Version, Release, Comments, FindingDetails, RiskStatement, CciNumber, " +
